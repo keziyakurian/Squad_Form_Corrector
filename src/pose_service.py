@@ -1,18 +1,24 @@
 import cv2
 import numpy as np
 import time
+import sys
 from typing import Tuple, Optional, List, Deque
 from collections import deque
 
 # TRIPLE-LAYER DEFENSIVE IMPORT FOR MEDIAPIPE
+mp = None
+mp_pose = None
+import_error_msg = ""
+
 try:
     import mediapipe as mp
     try:
         from mediapipe.python.solutions import pose as mp_pose
-    except ImportError:
+    except ImportError as e:
+        import_error_msg += f"Sub-import failed: {str(e)}. "
         import mediapipe.solutions.pose as mp_pose
-except ImportError:
-    # This will still raise an error later, but we can catch it in the init
+except ImportError as e:
+    import_error_msg += f"Primary import failed: {str(e)}."
     mp = None
     mp_pose = None
 
@@ -25,7 +31,7 @@ class PoseEstimator:
     
     def __init__(self, min_detection_confidence: float = 0.7, min_tracking_confidence: float = 0.7):
         if mp is None or mp_pose is None:
-            raise ImportError("MediaPipe is not installed correctly in this environment.")
+            raise ImportError(f"MediaPipe initialization failure: {import_error_msg}")
             
         # Initialize MediaPipe Pose with the robustly imported module
         self.mp_pose = mp_pose
@@ -105,6 +111,7 @@ class PoseEstimator:
             landmarks = results.pose_landmarks.landmark
             
             # Constraint: Joint Visibility Threshold
+            # Note: We rely on the mp_pose (mp_solutions_pose) constants
             ankle_landmark = landmarks[self.mp_pose.PoseLandmark.LEFT_ANKLE.value]
             if ankle_landmark.visibility < 0.7:
                 warning_msg = "VISIBILITY ALERT: ENSURE FULL BODY IS IN FRAME"
