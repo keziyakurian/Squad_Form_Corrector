@@ -1,5 +1,7 @@
 # Intelligent Computer Vision Fitness Analytics System
 
+**Live Model Demo:** [squad-form-corrector.streamlit.app](https://squadformcorrector-uznheqspxcpgvzkxrftste.streamlit.app)
+
 ## Project Overview
 This repository contains a production-grade Computer Vision (CV) application designed for automated biomechanical analysis and exercise tracking. The system utilizes MediaPipe's BlazePose architecture to monitor human movement in real-time, specifically optimized for squat repetition counting with high-fidelity accuracy and state-machine reliability.
 
