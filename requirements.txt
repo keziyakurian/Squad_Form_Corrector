@@ -1,7 +1,6 @@
-opencv-python
+opencv-python-headless
 mediapipe
 numpy
 streamlit
 streamlit-webrtc
 av
-pytest
