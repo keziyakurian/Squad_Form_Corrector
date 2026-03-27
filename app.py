@@ -69,7 +69,13 @@ with col_stream:
         mode=WebRtcMode.SENDRECV,
         video_processor_factory=PoseProcessingService,
         rtc_configuration={
-            "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
+            "iceServers": [
+                {"urls": ["stun:stun.l.google.com:19302"]},
+                {"urls": ["stun:stun1.l.google.com:19302"]},
+                {"urls": ["stun:stun2.l.google.com:19302"]},
+                {"urls": ["stun:stun3.l.google.com:19302"]},
+                {"urls": ["stun:stun4.l.google.com:19302"]},
+            ]
         },
         media_stream_constraints={"video": True, "audio": False},
         async_processing=True,
@@ -109,15 +115,4 @@ with st.sidebar:
         webrtc_ctx.video_processor.estimator.alpha = smoothing_factor
     
     st.divider()
-    
-    # Hidden Diagnostic Section
-    with st.expander("System Diagnostics (Debug only)"):
-        import mediapipe as mp
-        import platform
-        import sys
-        st.write(f"Python Version: {platform.python_version()}")
-        st.write(f"Mediapipe Version: {getattr(mp, '__version__', 'Unknown')}")
-        st.write(f"Solutions Available: {dir(mp.solutions)}")
-        st.write(f"Original Path: {sys.path[:3]}")
-
-    st.caption("AI Fitness Tracker Analytics | Build 1.2.1-Production")
+    st.caption("AI Fitness Tracker Analytics | Build 1.2.2-Production")
