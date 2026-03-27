@@ -118,9 +118,16 @@ with col_stream:
             max_depth = 180.0
             total_reps = 0
             
+            frame_skip = 2
+            frame_count = 0
+            
             while vf.isOpened():
                 ret, frame = vf.read()
                 if not ret: break
+                
+                frame_count += 1
+                if frame_count % frame_skip != 0:
+                    continue
                 
                 frame = cv2.resize(frame, (640, 480))
                 try:
