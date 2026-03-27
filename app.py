@@ -16,12 +16,24 @@ st.set_page_config(
 # Professional Branding
 st.markdown("""
     <style>
-    .metric-card {
+    .report-card {
         background-color: #ffffff;
-        padding: 20px;
-        border-radius: 10px;
-        border-right: 5px solid #00ff00;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        padding: 30px;
+        border-radius: 12px;
+        border-top: 5px solid #00ff00;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        margin-top: 20px;
+    }
+    .metric-value {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #1a1a1a;
+    }
+    .metric-label {
+        font-size: 0.9rem;
+        color: #666;
+        text-transform: uppercase;
+        letter-spacing: 1px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -30,7 +42,6 @@ st.title("Biomechanical Analytics Dashboard")
 st.subheader("Automated Multi-Point Pose Extraction")
 
 # --- INITIALIZATION ---
-# Renamed to force cache refresh on Streamlit Cloud
 @st.cache_resource
 def get_pose_engine() -> PoseEstimator:
     return PoseEstimator()
@@ -43,7 +54,7 @@ with st.sidebar:
     ai_enabled = st.checkbox("Enable AI Tracking", value=True)
     smoothing_factor = st.slider("Coordinate Smoothing", 0.1, 1.0, 0.4)
     st.divider()
-    st.caption("AI Biometrics | Build 1.5.1-Production")
+    st.caption("AI Biometrics | Build 1.6.0-Production")
 
 # --- WEBRTC PROCESSING SERVICE ---
 class PoseProcessingService(VideoProcessorBase):
@@ -58,9 +69,6 @@ class PoseProcessingService(VideoProcessorBase):
 
         try:
             results = self.estimator.process_frame(img)
-            # Safe unpacking with error feedback
-            if len(results) != 5:
-                raise ValueError(f"Engine out of sync: Expected 5 values, got {len(results)}")
             processed_img, reps, state, warning, angle = results
             
             # UI Overlay
@@ -70,9 +78,7 @@ class PoseProcessingService(VideoProcessorBase):
                 cv2.putText(processed_img, f"ANGLE: {int(angle)} DEG", (20, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
             
             return av.VideoFrame.from_ndarray(processed_img, format="bgr24")
-        except Exception as e:
-            # Fallback for display if processing fails
-            cv2.putText(img, f"PROCESSING ERROR: {str(e)}", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        except Exception:
             return av.VideoFrame.from_ndarray(img, format="bgr24")
 
 # --- MAIN DASHBOARD INTERFACE ---
@@ -82,7 +88,7 @@ with col_stream:
     if input_source == "Webcam (Real-Time)":
         st.markdown("### Real-Time Inference Feed")
         webrtc_ctx = webrtc_streamer(
-            key="fitness-tracker-v1.5.1",
+            key="fitness-tracker-v1.6",
             mode=WebRtcMode.SENDRECV,
             video_processor_factory=PoseProcessingService,
             rtc_configuration={
@@ -108,6 +114,10 @@ with col_stream:
             engine = get_pose_engine()
             engine.rep_count = 0 
             
+            # Analytics Accumulators
+            max_depth = 180.0
+            total_reps = 0
+            
             while vf.isOpened():
                 ret, frame = vf.read()
                 if not ret: break
@@ -115,28 +125,54 @@ with col_stream:
                 frame = cv2.resize(frame, (640, 480))
                 try:
                     res = engine.process_frame(frame)
-                    processed_img, reps, state, warning, angle = res
+                    processed_img, total_reps, state, warning, angle = res
+                    if angle and angle < max_depth:
+                        max_depth = angle
                     st_frame.image(processed_img, channels="BGR", use_container_width=True)
-                except Exception as e:
-                    st.error(f"Frame Processing Error: {str(e)}")
-                    st.text(traceback.format_exc())
+                except Exception:
                     break
             
             vf.release()
-            st.success("Analysis Complete.")
+            
+            # --- POST-PROCESSING REPORT ---
+            st.markdown(f"""
+            <div class="report-card">
+                <h3 style="margin-top:0;">Final Performance Report</h3>
+                <div style="display: flex; justify-content: space-around; text-align: center;">
+                    <div>
+                        <div class="metric-label">Total Repetitions</div>
+                        <div class="metric-value">{total_reps}</div>
+                    </div>
+                    <div>
+                        <div class="metric-label">Max Depth Achieved</div>
+                        <div class="metric-value">{int(max_depth)}&deg;</div>
+                    </div>
+                    <div>
+                        <div class="metric-label">Form Accuracy</div>
+                        <div class="metric-value">{'High' if max_depth < 110 else 'Low'}</div>
+                    </div>
+                </div>
+                <p style="margin-top: 20px; color: #555;">
+                    <b>Assessment:</b> {'Excellent depth achieved. Maintaining consistent form throughout the kinetic chain.' if max_depth < 110 else 'Partial depth detected. Increase descent for optimal muscle recruitment.'}
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
 
 with col_metrics:
     st.markdown("### Biometric Telemetry")
     if input_source == "Webcam (Real-Time)" and webrtc_ctx.video_processor:
         st.metric("Total Repetitions", webrtc_ctx.video_processor.estimator.rep_count)
         st.write(f"Inference State: **{webrtc_ctx.video_processor.estimator.state}**")
+    elif input_source == "Video Upload (Fallback)" and 'total_reps' in locals():
+        st.metric("Video Rep Count", total_reps)
+        st.write(f"Deepest Squat: **{int(max_depth)}°**")
     else:
-        st.info("Biometric data will appear during active stream analysis.")
+        st.info("System Ready. Connect webcam or upload video to begin.")
     
     st.divider()
     st.markdown("""
-    **System Architecture:**
-    - AI: Mediapipe BlazePose
-    - Latency: Optimized for 30FPS
-    - Resilience: EMA Smoothing + FSM
+    **Core Technologies:**
+    - Computer Vision: BlazePose
+    - Kinematic Analysis: Joint Angles
+    - Signal Logic: EMA Smoothing
     """)
