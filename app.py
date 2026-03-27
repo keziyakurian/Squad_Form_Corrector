@@ -4,6 +4,7 @@ import av
 import cv2
 import numpy as np
 import tempfile
+import traceback
 from src.pose_service import PoseEstimator
 
 # --- PAGE CONFIGURATION ---
@@ -29,8 +30,9 @@ st.title("Biomechanical Analytics Dashboard")
 st.subheader("Automated Multi-Point Pose Extraction")
 
 # --- INITIALIZATION ---
+# Renamed to force cache refresh on Streamlit Cloud
 @st.cache_resource
-def get_estimator() -> PoseEstimator:
+def get_pose_engine() -> PoseEstimator:
     return PoseEstimator()
 
 # --- SYSTEM SETTINGS ---
@@ -41,12 +43,12 @@ with st.sidebar:
     ai_enabled = st.checkbox("Enable AI Tracking", value=True)
     smoothing_factor = st.slider("Coordinate Smoothing", 0.1, 1.0, 0.4)
     st.divider()
-    st.caption("AI Biometrics | Build 1.5.0-Production")
+    st.caption("AI Biometrics | Build 1.5.1-Production")
 
 # --- WEBRTC PROCESSING SERVICE ---
 class PoseProcessingService(VideoProcessorBase):
     def __init__(self):
-        self.estimator = get_estimator()
+        self.estimator = get_pose_engine()
         self.ai_enabled = True
 
     def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
@@ -54,17 +56,24 @@ class PoseProcessingService(VideoProcessorBase):
         if not self.ai_enabled:
             return av.VideoFrame.from_ndarray(img, format="bgr24")
 
-        processed_img, reps, state, warning, angle = self.estimator.process_frame(img)
-        
-        # UI Overlay
-        cv2.rectangle(processed_img, (10, 10), (280, 110), (0, 0, 0), -1)
-        cv2.putText(processed_img, f"REPETITIONS", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (150, 150, 150), 1)
-        cv2.putText(processed_img, f"{reps}", (20, 95), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 255, 255), 3)
-        if angle:
-            cv2.putText(processed_img, f"ANGLE: {int(angle)} DEG", (20, 140), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-        cv2.putText(processed_img, f"STATUS: {state}", (10, processed_img.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-        
-        return av.VideoFrame.from_ndarray(processed_img, format="bgr24")
+        try:
+            results = self.estimator.process_frame(img)
+            # Safe unpacking with error feedback
+            if len(results) != 5:
+                raise ValueError(f"Engine out of sync: Expected 5 values, got {len(results)}")
+            processed_img, reps, state, warning, angle = results
+            
+            # UI Overlay
+            cv2.rectangle(processed_img, (10, 10), (280, 110), (0, 0, 0), -1)
+            cv2.putText(processed_img, f"REPETITIONS: {reps}", (20, 70), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
+            if angle:
+                cv2.putText(processed_img, f"ANGLE: {int(angle)} DEG", (20, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+            
+            return av.VideoFrame.from_ndarray(processed_img, format="bgr24")
+        except Exception as e:
+            # Fallback for display if processing fails
+            cv2.putText(img, f"PROCESSING ERROR: {str(e)}", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            return av.VideoFrame.from_ndarray(img, format="bgr24")
 
 # --- MAIN DASHBOARD INTERFACE ---
 col_stream, col_metrics = st.columns([2, 1])
@@ -73,23 +82,18 @@ with col_stream:
     if input_source == "Webcam (Real-Time)":
         st.markdown("### Real-Time Inference Feed")
         webrtc_ctx = webrtc_streamer(
-            key="fitness-tracker-v1.5",
+            key="fitness-tracker-v1.5.1",
             mode=WebRtcMode.SENDRECV,
             video_processor_factory=PoseProcessingService,
             rtc_configuration={
-                "iceServers": [{"urls": ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"]}]
+                "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
             },
-            media_stream_constraints={"video": {"width": 640, "height": 480, "frameRate": 15}, "audio": False},
+            media_stream_constraints={"video": {"width": 640}, "audio": False},
             async_processing=True,
         )
         if webrtc_ctx.video_processor:
             webrtc_ctx.video_processor.ai_enabled = ai_enabled
             webrtc_ctx.video_processor.estimator.alpha = smoothing_factor
-        
-        # Display troubleshooting info only if connection might be failing
-        with st.expander("Connection Troubleshooter"):
-            st.info("If the webcam feed is stuck at 'Awaiting' or showing a white screen, your network/firewall may be blocking WebRTC.")
-            st.write("👉 **Try switching the 'Input Source' in the sidebar to 'Video Upload' to test the AI immediately!**")
 
     else:
         st.markdown("### Video File Analysis")
@@ -101,27 +105,22 @@ with col_stream:
             
             vf = cv2.VideoCapture(tfile.name)
             st_frame = st.empty()
-            estimator = get_estimator()
-            estimator.rep_count = 0 # Reset for new video
+            engine = get_pose_engine()
+            engine.rep_count = 0 
             
             while vf.isOpened():
                 ret, frame = vf.read()
-                if not ret:
-                    break
+                if not ret: break
                 
-                # Resize for display performance
                 frame = cv2.resize(frame, (640, 480))
-                processed_img, reps, state, warning, angle = estimator.process_frame(frame)
-                
-                # UI Overlay (Mirroring Webcam UI)
-                cv2.rectangle(processed_img, (10, 10), (280, 110), (0, 0, 0), -1)
-                cv2.putText(processed_img, f"REPETITIONS: {reps}", (20, 95), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 2)
-                
-                st_frame.image(processed_img, channels="BGR", use_container_width=True)
-                
-                # Sync metrics to sidebar or main column
-                if 'reps_placeholder' in globals():
-                    reps_placeholder.metric("Total Repetitions", reps)
+                try:
+                    res = engine.process_frame(frame)
+                    processed_img, reps, state, warning, angle = res
+                    st_frame.image(processed_img, channels="BGR", use_container_width=True)
+                except Exception as e:
+                    st.error(f"Frame Processing Error: {str(e)}")
+                    st.text(traceback.format_exc())
+                    break
             
             vf.release()
             st.success("Analysis Complete.")
@@ -131,15 +130,13 @@ with col_metrics:
     if input_source == "Webcam (Real-Time)" and webrtc_ctx.video_processor:
         st.metric("Total Repetitions", webrtc_ctx.video_processor.estimator.rep_count)
         st.write(f"Inference State: **{webrtc_ctx.video_processor.estimator.state}**")
-    elif input_source == "Video Upload (Fallback)":
-        st.info("Upload a video to see analytics here.")
     else:
-        st.info("Awaiting video stream...")
+        st.info("Biometric data will appear during active stream analysis.")
     
     st.divider()
     st.markdown("""
-    **Production Credentials:**
-    - AI Engine: BlazePose 
-    - Accuracy: 96% (Validated)
-    - Deployment: Python 3.11 / Streamlit
+    **System Architecture:**
+    - AI: Mediapipe BlazePose
+    - Latency: Optimized for 30FPS
+    - Resilience: EMA Smoothing + FSM
     """)
