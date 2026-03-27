@@ -1,5 +1,13 @@
 ffmpeg
 libsm6
 libxext6
-libgl1
+libgl1-mesa-glx
 libglib2.0-0
+libavcodec-dev
+libavformat-dev
+libavdevice-dev
+libavfilter-dev
+libavutil-dev
+libswscale-dev
+libswresample-dev
+libpostproc-dev
