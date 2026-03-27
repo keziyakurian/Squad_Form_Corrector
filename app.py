@@ -109,4 +109,15 @@ with st.sidebar:
         webrtc_ctx.video_processor.estimator.alpha = smoothing_factor
     
     st.divider()
-    st.caption("AI Fitness Tracker Analytics | Build 1.2.0-Production")
+    
+    # Hidden Diagnostic Section
+    with st.expander("System Diagnostics (Debug only)"):
+        import mediapipe as mp
+        import platform
+        import sys
+        st.write(f"Python Version: {platform.python_version()}")
+        st.write(f"Mediapipe Version: {getattr(mp, '__version__', 'Unknown')}")
+        st.write(f"Solutions Available: {dir(mp.solutions)}")
+        st.write(f"Original Path: {sys.path[:3]}")
+
+    st.caption("AI Fitness Tracker Analytics | Build 1.2.1-Production")
