@@ -61,12 +61,12 @@ The system is architected for seamless deployment across modern cloud infrastruc
 ## Setup Instructions
 
 ### Cloud Deployment (Zero Install)
-This application is fully compatible with **Streamlit Cloud**. Link this repository and use `app.py` as the entry point with `requirements_cloud.txt` and `packages.txt`.
+This application is fully compatible with **Streamlit Cloud**. Link this repository and use `app.py` as the entry point. The system will automatically detect `requirements.txt` and `packages.txt`.
 
 ### Local Development
 1. Install dependencies:
    ```bash
-   pip install -r requirements.txt
+   pip install -r requirements_local.txt
    ```
 2. Launch the Streamlit dashboard:
    ```bash
