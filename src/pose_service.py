@@ -1,15 +1,20 @@
 import cv2
-import mediapipe as mp
-# Robust import for pose solutions
-try:
-    from mediapipe.python.solutions import pose as mp_pose
-except ImportError:
-    import mediapipe.solutions.pose as mp_pose
-
 import numpy as np
 import time
 from typing import Tuple, Optional, List, Deque
 from collections import deque
+
+# TRIPLE-LAYER DEFENSIVE IMPORT FOR MEDIAPIPE
+try:
+    import mediapipe as mp
+    try:
+        from mediapipe.python.solutions import pose as mp_pose
+    except ImportError:
+        import mediapipe.solutions.pose as mp_pose
+except ImportError:
+    # This will still raise an error later, but we can catch it in the init
+    mp = None
+    mp_pose = None
 
 class PoseEstimator:
     """
@@ -19,6 +24,9 @@ class PoseEstimator:
     """
     
     def __init__(self, min_detection_confidence: float = 0.7, min_tracking_confidence: float = 0.7):
+        if mp is None or mp_pose is None:
+            raise ImportError("MediaPipe is not installed correctly in this environment.")
+            
         # Initialize MediaPipe Pose with the robustly imported module
         self.mp_pose = mp_pose
         self.pose = self.mp_pose.Pose(
@@ -97,7 +105,6 @@ class PoseEstimator:
             landmarks = results.pose_landmarks.landmark
             
             # Constraint: Joint Visibility Threshold
-            # Note: POSE_LANDMARKS refers to the pose module constants
             ankle_landmark = landmarks[self.mp_pose.PoseLandmark.LEFT_ANKLE.value]
             if ankle_landmark.visibility < 0.7:
                 warning_msg = "VISIBILITY ALERT: ENSURE FULL BODY IS IN FRAME"
@@ -136,8 +143,7 @@ class PoseEstimator:
                 
                 if self.state != "WAITING":
                     # Update timer if we just changed into a moving state
-                    # We only reset last_state_change_time when we enter a new state
-                    pass # Handled by outer logic or simplified here
+                    pass 
 
             # Draw skeleton landmarks on the image
             self.mp_drawing.draw_landmarks(image, results.pose_landmarks, self.mp_pose.POSE_CONNECTIONS)
